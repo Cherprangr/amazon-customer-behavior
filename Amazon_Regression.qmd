@@ -1,0 +1,146 @@
+---
+title: "Amazon_Customer Behaviour"
+format: html
+toc: true         
+toc_float: true
+number_sections: true
+editor: visual
+---
+
+```{r}
+rm(list = ls())
+```
+
+# **The Amazon Customer Behavior Survey Data Set**
+
+## **Overview**
+
+Online shopping platforms like Amazon offer customers a wide range of product choices, which can create both opportunities and challenges. Even though variety improves consumer options, it also imposes search costs, such as the time and effort required to locate appropriate products. To address this, many e-commerce platforms implement personalized recommendation systems to guide customers toward relevant products more efficiently to enhance customer satisfaction. This research analyzed consumer search costs and recommendation systems, examining on how personalized recommendations are associated with customer shopping satisfaction.
+
+H1: Customers who receive personalized recommendations and explore fewer search result pages are likely to have higher shopping satisfaction.
+
+```{r}
+library(readxl)
+data <- read_excel("/Users/jeans/Documents/Econometrics/Empirical Project/Amazon Customer Behavior Survey.xlsx")
+```
+
+## **Data Cleaning and Organization**
+
+Regarding the data cleaning process, there is no significant data cleaning needed for this dataset because it is already well-structured and does not have any missing values. However, all selected variables needed to be transformed for the regression model because they were originally stored as text or character values (e.g., Yes, No, and time period values). These values were necessary to be converted into binary or numeric variables for running the regression.
+
+```{r}
+# DV: Already numeric
+data$Shopping_Satisfaction <- as.numeric(data$Shopping_Satisfaction)
+
+data$Personalized_Recommendation_Frequency <- as.numeric(as.character(factor(
+  data$Personalized_Recommendation_Frequency, 
+  levels = c("No", "Sometimes", "Yes"),
+  labels = c(0, 1, 2)
+)))
+
+data$Recommendation_Helpfulness <- as.numeric(as.character(factor(
+  data$Recommendation_Helpfulness,
+  levels = c("No", "Sometimes", "Yes"),
+  labels = c(0, 1, 2)
+)))
+
+data$Purchase_Frequency <- as.numeric(as.character(factor(
+  data$Purchase_Frequency,
+  levels = c("Less than once a month", "Once a month", "Few times a month", "Once a week", "Multiple times a week"),
+  labels = c(1, 2, 3, 4, 5)
+)))
+
+data$Search_Result_Exploration <- as.numeric(as.character(factor(
+  data$Search_Result_Exploration,
+  levels = c("First page", "Multiple pages"),
+  labels = c(1, 0)
+)))
+#View(data)
+```
+
+## **The Regression Model**
+
+The regression results examine how different recommendation and search-related variables influence Shopping Satisfaction. Search Result Exploration is positively and significantly associated with satisfaction (p \< 0.05), suggesting that users who pay more attention to top search results tend to be more satisfied. In contrast, Recommendation Helpfulness shows a negative and significant relationship (p \< 0.05), indicating that perceived helpfulness of recommendations may not always enhance satisfaction. Other variables, Purchase Frequency and Personalized Recommendation Frequency, are not statistically significant. The model’s explanatory power is low (Adjusted R² = 0.017), which is expected for perceptual survey data.
+
+```{r}
+library(stargazer)
+model <- lm(Shopping_Satisfaction ~ Purchase_Frequency + Recommendation_Helpfulness+ Personalized_Recommendation_Frequency+ Search_Result_Exploration, data=data)
+stargazer(model, type = "text", title = "Amazon_Personalized Recommendation", align = TRUE)
+```
+
+### **Interaction Term**
+
+The interaction term was created to explore further the relationship between personalized recommendations and customer search behavior. The regression results show that Search Result Exploration was statistically significant and positively associated with Shopping Satisfaction. Subsequently, this research included an interaction term between Recommendation Helpfulness and Search Result Exploration to tests whether helpful recommendations are more effective when customers can rely on the first page of search results rather than exploring multiple pages. As a result, the interaction term was negative and marginally significant (p \< 0.1), indicating that the positive effect of helpful recommendations may weaken when customers rely solely on the first page of results.
+
+```{r}
+model2 <- lm(Shopping_Satisfaction ~ Purchase_Frequency + Recommendation_Helpfulness+ Personalized_Recommendation_Frequency+ Search_Result_Exploration+Recommendation_Helpfulness* Search_Result_Exploration, data=data)
+stargazer(model2, type = "text", title = "Amazon_Interaction Term", align = TRUE)
+
+```
+
+### **The Log Transformation**
+
+Among the independent variables, Purchase Frequency was transformed using the natural logarithm to meet the statistical transformation requirement. This variable is ordinal, ranging from 1 to 5, and the difference in satisfaction between shopping frequency levels is unlikely to be linear. The log transformation helps account for diminishing returns, reflecting that each additional increase in shopping frequency may have a smaller effect on satisfaction.
+
+The regression results show that Search Result Exploration was statistically significant and positively associated with Shopping Satisfaction (p \< 0.01). This suggests that customers who focus primarily on the first page of search results tend to report higher satisfaction. The interaction term between Recommendation Helpfulness and Search Result Exploration was negative and marginally significant (p \< 0.1), indicating that the positive effect of helpful recommendations may weaken when customers rely solely on the first page of results.
+
+```{r}
+# Step 1: Log-transform Purchase Frequency
+data$log_Purchase_Frequency <- log(data$Purchase_Frequency)
+
+# Step 2: Re-run your regression model with the log-transformed variable
+model3_log <- lm(Shopping_Satisfaction ~ log_Purchase_Frequency + 
+                   Recommendation_Helpfulness + 
+                   Personalized_Recommendation_Frequency + 
+                   Search_Result_Exploration + 
+                   Recommendation_Helpfulness * Search_Result_Exploration, 
+                 data = data)
+
+# Step 3: Output your regression result
+library(stargazer)
+stargazer(model3_log, type = "text", title = "Amazon Shopping Satisfaction Model", align = TRUE)
+```
+
+## **Multicollinearity Assessment**
+
+Multicollinearity was assessed to ensure that the predictor variables in the regression model were not excessively correlated. High multicollinearity can inflate the standard errors of regression coefficients, making it difficult to determine the unique contribution of each variable. To evaluate this model, Generalized Variance Inflation Factor (GVIF) values were used. GVIF extends the traditional VIF to account for predictors with more than one degree of freedom, such as interaction terms or categorical variables.
+
+```{r}
+# Step 1: Load the necessary package
+library(car)
+
+# Step 2: Run VIF on your regression model
+vif(model3_log)
+
+```
+
+All GVIF values were well below the commonly accepted threshold of 5.0, and the adjusted GVIF values were also low, indicating that none of the predictors exhibit problematic multicollinearity. This suggests that the independent variables in the model are sufficiently distinct from one another, allowing for a reliable interpretation of their individual effects on shopping satisfaction.
+
+In conclusion, the absence of multicollinearity strengthens confidence in the model’s results. It ensures that the estimated relationships between the predictors, such as search behavior and recommendation perceptions, and shopping satisfaction are not distorted by underlying correlations among the variables.
+
+```{r}
+# Create a tidy data frame of VIF results
+vif_table <- as.data.frame(vif(model3_log, type = "predictor"))
+vif_table$Variable <- rownames(vif_table)
+rownames(vif_table) <- NULL
+
+# Reorder columns
+vif_table <- vif_table[, c("Variable", "GVIF")]
+
+# Print or view
+print(vif_table)
+#View(vif_table)
+
+```
+
+```{r}
+# Run full GVIF including interaction terms
+vif(model3_log)
+
+```
+
+## **Conclusion**
+
+This study supports the idea that search effort plays a significant role in shaping online shopping satisfaction, while showing that the effectiveness of personalized recommendations may depend on how they are perceived and used by customers. The finding that focusing on the first page of search results is associated with higher satisfaction reinforces the importance of reducing search effort in e-commerce environments. Although the recommendation-related variables did not produce the expected positive effects, this outcome suggests that simply offering recommendations may not be enough; what matters is whether users trust, engage with, and find value in those recommendations.
+
+These results highlight the need to consider both user behavior and platform design when evaluating online customer experiences. Personalized systems must be designed not only to deliver relevant content but also to encourage user engagement and confidence. Future research should explore the role of trust, transparency, and personalization quality to better understand when recommendation systems succeed or fall short. Overall, this study emphasizes that improving customer satisfaction involves more than technology, it requires a thoughtful understanding of how users interact with digital tools during the shopping process.
